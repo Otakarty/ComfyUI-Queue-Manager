@@ -6,6 +6,7 @@ from server import PromptServer
 import logging
 import json
 import heapq
+import uuid
 
 from .qm_db import get_conn, read_query, read_single, write_query, write_many
 
@@ -190,6 +191,12 @@ class QM_Queue:
     # NOTE: We keep only up to one item in native "pending" queue (to avoid bottleneck for large queues).
     def queue_put(self, item):  # comfy server calls this method
         with self.native_queue.mutex:
+            # Add extra workflow info if missing
+            workflow_info = item[3].setdefault("extra_pnginfo", {}).setdefault("workflow", {})
+            default_uuid = str(uuid.uuid4())
+            workflow_id = workflow_info.get("id", default_uuid)
+            workflow_info["workflow_name"] = workflow_info.get("workflow_name", f"Workflow-{workflow_id}")
+
             # Add the item to the database
             write_query(
                 """
@@ -200,7 +207,7 @@ class QM_Queue:
                     item[1],
                     item[0],
                     item[3]["extra_pnginfo"]["workflow"]["workflow_name"],
-                    item[3]["extra_pnginfo"]["workflow"]["id"],
+                    workflow_id,
                     json.dumps(item),
                 ),
             )
