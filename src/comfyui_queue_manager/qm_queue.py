@@ -201,12 +201,10 @@ class QM_Queue:
         # logging.info(json.dumps(item))
 
         with self.native_queue.mutex:
-            # if item[3]["extra_pnginfo"] is not set then we pass it to original put
-            # It suggests request does not come from ComfyUI but from external source (like API or some app's plugin) - as such they won't benefit from queue manager features
-            if "extra_pnginfo" not in item[3] or "workflow" not in item[3]["extra_pnginfo"]:
-                # item = tuple(item)
-                self.original_put(tuple(item))
-                return
+            # Add extra workflow info if missing
+            workflow_info = item[3].get("extra_pnginfo", {}).get("workflow", {})
+            workflow_id = workflow_info.get("id", "")
+            workflow_name = workflow_info.get("workflow_name", f"External Job")
 
             # Add the item to the database
             write_query(
@@ -217,8 +215,8 @@ class QM_Queue:
                 (
                     item[1],
                     item[0],
-                    item[3]["extra_pnginfo"]["workflow"]["workflow_name"],
-                    item[3]["extra_pnginfo"]["workflow"]["id"],
+                    workflow_name,
+                    workflow_id,
                     json.dumps(item),
                 ),
             )
@@ -285,6 +283,14 @@ class QM_Queue:
                 timeout
             )  # Wait for an item to be available in the queue (either one from the database (above) or wait for put())
 
+            item_data = None
+            if queue_item and isinstance(queue_item[0], (list, tuple)) and len(queue_item[0]) > 3:
+                item_data = queue_item[0][3]
+            else:
+                print(f"[WARN] Structure inattendue pour queue_item : {queue_item}")
+
+            workflow_info = (isinstance(item_data, dict) and item_data.get("extra_pnginfo", {}).get("workflow", {})) or {}
+            workflow_name = workflow_info.get("workflow_name", "")
             if queue_item is not None:
                 # Mark the item as running in the database
                 write_query(
@@ -589,12 +595,15 @@ class QM_Queue:
                     item[3]["client_id"] = client_id
 
                 PromptServer.instance.number += 1
+                workflow_info = item[3].get("extra_pnginfo", {}).get("workflow", {})
+                workflow_id = workflow_info.get("id", "")
+                workflow_name = workflow_info.get("workflow_name", f"Unnamed workflow")
                 query_params.append(
                     (
                         item[1],
                         PromptServer.instance.number,
-                        item[3]["extra_pnginfo"]["workflow"]["workflow_name"],
-                        item[3]["extra_pnginfo"]["workflow"]["id"],
+                        workflow_name,
+                        workflow_id,
                         json.dumps(item),
                         status,
                     )

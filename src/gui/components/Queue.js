@@ -25,8 +25,9 @@ export default function Queue( { data, isLoading, error, progress } ) {
     );
   }
 
-  function QueueItemRow({item, className, loader, index, mode}) {
+  function QueueItemRow({item, className, loader, index}) {
     const {appStatus, setAppStatus} = useContext(AppContext)
+    const mode = item[3].extra_pnginfo ? 'running' : 'external';
 
     async function cancelQueueItem() {
       const route = (mode === 'running' || mode === 'external') ? 'interrupt' : 'queue';
@@ -42,7 +43,7 @@ export default function Queue( { data, isLoading, error, progress } ) {
     async function loadQueueItem() {
       // console.log("Loading queue item", item);
       window.parent.postMessage(
-        { type: "QM_LoadWorkflow", workflow: item[3].extra_pnginfo.workflow, number: item[0] },
+        { type: "QM_LoadWorkflow", workflow: item?.[3]?.extra_pnginfo?.workflow, number: item[0] },
         "*"
       );
     }
@@ -59,13 +60,19 @@ export default function Queue( { data, isLoading, error, progress } ) {
       await apiCall(`queue_manager/play`, {items: [item[3].db_id], front: appStatus.shiftDown === true, clientId: appStatus.clientId})
     }
 
-    async function filterByWorkflow() {
-      // Post message to parent window to filter by workflow
-      setAppStatus(prev => ({...prev, filters: {...appStatus.filters, workflow: {
+    function filterByWorkflow(mode) {
+      // Update app status filters using the previous state to avoid updating during render
+      setAppStatus(prev => ({
+        ...prev,
+        filters: {
+          ...prev.filters,
+          workflow: {
             type: 'workflow',
-            value: item[3].extra_pnginfo.workflow.id,
-            valueLabel: item[3].extra_pnginfo.workflow.workflow_name
-          }}}));
+            value: mode === 'external' ? "External job" : item?.[3]?.extra_pnginfo?.workflow?.id,
+            valueLabel: mode === 'external' ? "External job" : item?.[3]?.extra_pnginfo?.workflow?.workflow_name,
+          }
+        }
+      }));
     }
 
 
@@ -80,10 +87,10 @@ export default function Queue( { data, isLoading, error, progress } ) {
           }
         </td>
         <td className="px-3 py-1 text-left name">
-          <button className={'plain'} onClick={filterByWorkflow}>
+          <button className={'plain'} onClick={() => filterByWorkflow(mode)}>
             {mode === 'external'
               ? "External job"
-              : (item[3].extra_pnginfo.workflow.workflow_name ? item[3].extra_pnginfo.workflow.workflow_name : "")
+              : (item?.[3]?.extra_pnginfo?.workflow?.workflow_name ?? "")
             }
           </button>
         </td>
@@ -138,10 +145,10 @@ export default function Queue( { data, isLoading, error, progress } ) {
         </thead>
         <tbody>
           {state.running.map(item => (
-            <QueueItemRow item={item} key={item[1]} className={'running'} loader={true} mode={ item[3].extra_pnginfo ? 'running' : 'external'} />
+            <QueueItemRow item={item} key={item[1]} className={'running'} loader={true}/>
           ))}
           {state.pending.map((item, index) => (
-            <QueueItemRow item={item} key={item[3].db_id} className={'pending'} index={index} />
+            <QueueItemRow item={item} key={item[3].db_id} className={'pending'} index={index}/>
           ))}
         </tbody>
       </table>
