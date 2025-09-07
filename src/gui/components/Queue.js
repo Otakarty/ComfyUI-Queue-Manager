@@ -63,8 +63,8 @@ export default function Queue( { data, isLoading, error, progress } ) {
       // Post message to parent window to filter by workflow
       setAppStatus(prev => ({...prev, filters: {...appStatus.filters, workflow: {
             type: 'workflow',
-            value: item[3].extra_pnginfo.workflow.id,
-            valueLabel: item[3].extra_pnginfo.workflow.workflow_name
+            value: item[3].extra_pnginfo?.workflow?.id || null,
+            valueLabel:   item?.[3]?.extra_pnginfo?.workflow?.workflow_name || "Unnamed workflow",
           }}}));
     }
 
@@ -81,7 +81,7 @@ export default function Queue( { data, isLoading, error, progress } ) {
         </td>
         <td className="px-3 py-1 text-left name">
           <button className={'plain'} onClick={filterByWorkflow}>
-            {item[3].extra_pnginfo.workflow.workflow_name ? item[3].extra_pnginfo.workflow.workflow_name : ""}
+            {item?.[3]?.extra_pnginfo?.workflow?.workflow_name || "Unnamed workflow"}
           </button>
         </td>
         <td className={'px-3 py-1 text-right actions'}>

@@ -192,10 +192,9 @@ class QM_Queue:
     def queue_put(self, item):  # comfy server calls this method
         with self.native_queue.mutex:
             # Add extra workflow info if missing
-            workflow_info = item[3].setdefault("extra_pnginfo", {}).setdefault("workflow", {})
-            default_uuid = str(uuid.uuid4())
-            workflow_id = workflow_info.get("id", default_uuid)
-            workflow_info["workflow_name"] = workflow_info.get("workflow_name", f"Workflow-{workflow_id}")
+            workflow_info = item[3].get("extra_pnginfo", {}).get("workflow", {})
+            workflow_id = workflow_info.get("id", "")
+            workflow_name = workflow_info.get("workflow_name", f"Unnamed workflow")
 
             # Add the item to the database
             write_query(
@@ -206,7 +205,7 @@ class QM_Queue:
                 (
                     item[1],
                     item[0],
-                    item[3]["extra_pnginfo"]["workflow"]["workflow_name"],
+                    workflow_name,
                     workflow_id,
                     json.dumps(item),
                 ),
@@ -274,6 +273,14 @@ class QM_Queue:
                 timeout
             )  # Wait for an item to be available in the queue (either one from the database (above) or wait for put())
 
+            item_data = None
+            if queue_item and isinstance(queue_item[0], (list, tuple)) and len(queue_item[0]) > 3:
+                item_data = queue_item[0][3]
+            else:
+                print(f"[WARN] Structure inattendue pour queue_item : {queue_item}")
+
+            workflow_info = (isinstance(item_data, dict) and item_data.get("extra_pnginfo", {}).get("workflow", {})) or {}
+            workflow_name = workflow_info.get("workflow_name", "")
             if queue_item is not None:
                 # Mark the item as running in the database
                 write_query(
@@ -286,7 +293,7 @@ class QM_Queue:
                 )
                 logging.info(
                     "[Queue Manager] Executing workflow: \033[33m%s\033[0m at %s",
-                    queue_item[0][3]["extra_pnginfo"]["workflow"]["workflow_name"],
+                    workflow_name,
                     queue_item[0][0],
                 )
                 return queue_item  # (item, task_counter)
@@ -575,12 +582,15 @@ class QM_Queue:
                     item[3]["client_id"] = client_id
 
                 PromptServer.instance.number += 1
+                workflow_info = item[3].get("extra_pnginfo", {}).get("workflow", {})
+                workflow_id = workflow_info.get("id", "")
+                workflow_name = workflow_info.get("workflow_name", f"Unnamed workflow")
                 query_params.append(
                     (
                         item[1],
                         PromptServer.instance.number,
-                        item[3]["extra_pnginfo"]["workflow"]["workflow_name"],
-                        item[3]["extra_pnginfo"]["workflow"]["id"],
+                        workflow_name,
+                        workflow_id,
                         json.dumps(item),
                         status,
                     )
